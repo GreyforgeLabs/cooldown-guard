@@ -89,6 +89,7 @@ pub fn run_guarded(
     let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let current_status = status_with_transaction(&tx, name, min_interval)?;
     if let Some(remaining_seconds) = current_status.remaining_seconds {
+        tx.rollback()?;
         return Ok(RunResult {
             name: name.to_owned(),
             action: "skip",
