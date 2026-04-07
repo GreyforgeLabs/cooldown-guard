@@ -1,0 +1,23 @@
+# Normalize line endings
+* text=auto
+
+# Explicit text files
+*.md text diff=markdown
+*.txt text
+*.py text diff=python
+*.js text diff=javascript
+*.ts text diff=javascript
+*.rs text diff=rust
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+*.sh text eol=lf
+Cargo.lock text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff2 binary
