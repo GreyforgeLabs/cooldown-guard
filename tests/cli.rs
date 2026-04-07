@@ -1,4 +1,6 @@
 use std::fs;
+use std::thread;
+use std::time::Duration;
 
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
@@ -124,4 +126,63 @@ fn clear_resets_saved_state() {
         .assert()
         .success()
         .stdout(contains("state=never-run"));
+}
+
+#[test]
+fn concurrent_runs_respect_cooldown_when_invoked_together() {
+    let (_temp, db, marker) = temp_paths();
+
+    let first_db = db.clone();
+    let first_marker = marker.clone();
+    let first = thread::spawn(move || {
+        let mut command = bin();
+        command.args([
+            "--db",
+            &first_db,
+            "run",
+            "--name",
+            "backup",
+            "--min-interval",
+            "10m",
+            "--",
+            "sh",
+            "-c",
+            &format!("sleep 0.3; printf A >> {first_marker}"),
+        ]);
+        let output = command.output().expect("first command should execute");
+        assert!(output.status.success());
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    });
+
+    thread::sleep(Duration::from_millis(25));
+
+    let second_db = db.clone();
+    let second_marker = marker.clone();
+    let second = thread::spawn(move || {
+        let mut command = bin();
+        command.args([
+            "--db",
+            &second_db,
+            "run",
+            "--name",
+            "backup",
+            "--min-interval",
+            "10m",
+            "--",
+            "sh",
+            "-c",
+            &format!("printf B >> {second_marker}"),
+        ]);
+        let output = command.output().expect("second command should execute");
+        assert!(output.status.success());
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    });
+
+    let first_output = first.join().unwrap();
+    let second_output = second.join().unwrap();
+
+    assert!(first_output.contains("action=run"));
+    assert!(second_output.contains("action=skip"));
+
+    assert_eq!(fs::read_to_string(marker).unwrap(), "A");
 }

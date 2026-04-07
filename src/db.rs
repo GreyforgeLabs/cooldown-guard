@@ -57,24 +57,6 @@ pub fn last_run(connection: &Connection, name: &str) -> Result<Option<RunRecord>
     Ok(row)
 }
 
-pub fn insert_run(connection: &Connection, record: &RunRecord) -> Result<()> {
-    connection.execute(
-        "
-        INSERT INTO runs (name, started_at, finished_at, exit_code, succeeded)
-        VALUES (?, ?, ?, ?, ?)
-        ",
-        params![
-            record.name,
-            record.started_at,
-            record.finished_at,
-            record.exit_code,
-            if record.succeeded { 1 } else { 0 }
-        ],
-    )?;
-
-    Ok(())
-}
-
 pub fn clear_runs(connection: &Connection, name: &str) -> Result<usize> {
     let deleted = connection.execute("DELETE FROM runs WHERE name = ?", params![name])?;
     Ok(deleted)

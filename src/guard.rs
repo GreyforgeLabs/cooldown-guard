@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use directories::ProjectDirs;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -77,7 +77,7 @@ pub fn status(connection: &Connection, name: &str, min_interval: Duration) -> Re
 }
 
 pub fn run_guarded(
-    connection: &Connection,
+    connection: &mut Connection,
     name: &str,
     min_interval: Duration,
     command: &[String],
@@ -86,7 +86,8 @@ pub fn run_guarded(
         return Err(anyhow!("missing command to execute"));
     }
 
-    let current_status = status(connection, name, min_interval)?;
+    let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let current_status = status_with_transaction(&tx, name, min_interval)?;
     if let Some(remaining_seconds) = current_status.remaining_seconds {
         return Ok(RunResult {
             name: name.to_owned(),
@@ -114,7 +115,20 @@ pub fn run_guarded(
         exit_code: status.code(),
         succeeded: status.success(),
     };
-    db::insert_run(connection, &record)?;
+    tx.execute(
+        "
+        INSERT INTO runs (name, started_at, finished_at, exit_code, succeeded)
+        VALUES (?, ?, ?, ?, ?)
+        ",
+        params![
+            record.name,
+            record.started_at,
+            record.finished_at,
+            record.exit_code,
+            if record.succeeded { 1 } else { 0 }
+        ],
+    )?;
+    tx.commit()?;
 
     Ok(RunResult {
         name: name.to_owned(),
@@ -125,6 +139,69 @@ pub fn run_guarded(
         started_at: Some(format_timestamp(started_at)?),
         finished_at: Some(format_timestamp(finished_at)?),
         remaining_seconds: None,
+    })
+}
+
+fn status_with_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    name: &str,
+    min_interval: Duration,
+) -> Result<StatusResult> {
+    let last = tx
+        .query_row(
+            "
+        SELECT name, started_at, finished_at, exit_code, succeeded
+        FROM runs
+        WHERE name = ?
+        ORDER BY finished_at DESC, id DESC
+        LIMIT 1
+        ",
+            params![name],
+            |row| {
+                Ok(RunRecord {
+                    name: row.get(0)?,
+                    started_at: row.get(1)?,
+                    finished_at: row.get(2)?,
+                    exit_code: row.get(3)?,
+                    succeeded: row.get::<_, i64>(4)? != 0,
+                })
+            },
+        )
+        .optional()?;
+
+    let now = now_utc().unix_timestamp();
+
+    Ok(match last {
+        None => StatusResult {
+            name: name.to_owned(),
+            state: GuardState::NeverRun,
+            last_exit_code: None,
+            last_succeeded: None,
+            last_started_at: None,
+            last_finished_at: None,
+            elapsed_seconds: None,
+            remaining_seconds: None,
+        },
+        Some(record) => {
+            let elapsed_seconds = elapsed_seconds(now, record.finished_at);
+            let remaining_seconds = remaining_seconds(elapsed_seconds, min_interval);
+            let state = if remaining_seconds.is_some() {
+                GuardState::CoolingDown
+            } else {
+                GuardState::Ready
+            };
+
+            StatusResult {
+                name: name.to_owned(),
+                state,
+                last_exit_code: record.exit_code,
+                last_succeeded: Some(record.succeeded),
+                last_started_at: Some(format_timestamp(record.started_at)?),
+                last_finished_at: Some(format_timestamp(record.finished_at)?),
+                elapsed_seconds: Some(elapsed_seconds),
+                remaining_seconds,
+            }
+        }
     })
 }
 

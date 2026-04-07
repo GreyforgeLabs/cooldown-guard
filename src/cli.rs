@@ -62,12 +62,13 @@ struct RunArgs {
 pub fn run() -> Result<i32> {
     let cli = Cli::parse();
     let db_path = cli.db.unwrap_or(guard::default_db_path()?);
-    let connection = guard::open_database(&db_path)?;
+    let mut connection = guard::open_database(&db_path)?;
 
     match cli.command {
         Commands::Run(args) => {
             let min_interval = guard::parse_min_interval(&args.min_interval)?;
-            let result = guard::run_guarded(&connection, &args.name, min_interval, &args.command)?;
+            let result =
+                guard::run_guarded(&mut connection, &args.name, min_interval, &args.command)?;
             print_run_result(&result, cli.json)?;
             Ok(result
                 .exit_code
