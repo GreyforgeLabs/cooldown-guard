@@ -4,6 +4,10 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/assets/openforge-cooldown-guard.webp" alt="cooldown-guard OpenForge project artwork" width="720">
+</p>
+
 ## Why This Exists
 
 `flock` solves overlap. It does not solve cadence.
