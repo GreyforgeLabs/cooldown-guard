@@ -35,9 +35,54 @@
       "ok": true,
       "severity": "info",
       "status": "pass"
+    },
+    {
+      "details": "setup.sh exited 0",
+      "id": "setup-script",
+      "label": "Setup script",
+      "name": "Setup script",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "cargo fmt --check passed",
+      "id": "cargo-fmt",
+      "label": "Cargo fmt",
+      "name": "Cargo fmt",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "cargo clippy passed",
+      "id": "cargo-clippy",
+      "label": "Cargo clippy",
+      "name": "Cargo clippy",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "cargo test passed",
+      "id": "cargo-test",
+      "label": "Cargo test",
+      "name": "Cargo test",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "verification command passed",
+      "id": "starthere-verification",
+      "label": "STARTHERE verification",
+      "name": "STARTHERE verification",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
     }
   ],
-  "generated_at": "2026-05-02T02:03:16+00:00",
+  "generated_at": "2026-05-02T02:36:57+00:00",
   "git": {
     "branch": "master",
     "dirty": false,
@@ -82,7 +127,8 @@
     "failed_checks": 0,
     "missing_release_files": 0,
     "ready": true,
-    "scrub_findings": 0
+    "scrub_findings": 0,
+    "status": "ready"
   },
   "release_files": {
     "missing": [],
