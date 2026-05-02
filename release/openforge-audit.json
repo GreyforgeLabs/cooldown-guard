@@ -1,0 +1,109 @@
+{
+  "checks": [
+    {
+      "details": "rust, shell",
+      "id": "project-type",
+      "label": "Project type",
+      "name": "Project type",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "tests/cli.rs, src/db.rs, src/guard.rs, src/main.rs, src/model.rs",
+      "id": "rust-source",
+      "label": "Rust source",
+      "name": "Rust source",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "test annotations or tests/ found",
+      "id": "rust-tests",
+      "label": "Rust tests",
+      "name": "Rust tests",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    },
+    {
+      "details": "no scaffold placeholders found",
+      "id": "template-placeholders-removed",
+      "label": "Template placeholders removed",
+      "name": "Template placeholders removed",
+      "ok": true,
+      "severity": "info",
+      "status": "pass"
+    }
+  ],
+  "generated_at": "2026-05-02T02:03:16+00:00",
+  "git": {
+    "branch": "master",
+    "dirty": false,
+    "is_repo": true,
+    "remote_configured": true,
+    "status_count": 0
+  },
+  "manifests": {
+    "Cargo.toml": {
+      "license": "AGPL-3.0-only",
+      "name": "cooldown-guard",
+      "version": "0.1.0"
+    }
+  },
+  "mutation_readiness": {
+    "github": {
+      "ready": true,
+      "requires_operator_gate": true
+    },
+    "webforge_deploy": {
+      "ready": true,
+      "requires_operator_gate": true
+    },
+    "webforge_stage": {
+      "ready": true,
+      "requires_operator_gate": true
+    }
+  },
+  "project": {
+    "languages": [
+      "rust",
+      "shell"
+    ],
+    "name": "cooldown-guard",
+    "scaffolded": true,
+    "spec_exists": true,
+    "subtitle": "Minimum-interval enforcer for cron jobs",
+    "tier": "Tier 3: Build If Momentum Builds",
+    "workspace_repo": true
+  },
+  "readiness": {
+    "failed_checks": 0,
+    "missing_release_files": 0,
+    "ready": true,
+    "scrub_findings": 0
+  },
+  "release_files": {
+    "missing": [],
+    "ok": true,
+    "present": [
+      "README.md",
+      "STARTHERE.md",
+      "CONTRIBUTING.md",
+      "CODE_OF_CONDUCT.md",
+      "LICENSE",
+      "SECURITY.md",
+      "CHANGELOG.md",
+      ".editorconfig",
+      ".gitattributes",
+      ".gitignore"
+    ]
+  },
+  "schema": "openforge.audit.v1",
+  "scrub": {
+    "finding_count": 0,
+    "findings": [],
+    "ok": true
+  }
+}
