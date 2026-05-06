@@ -8,6 +8,10 @@
   <img src="docs/assets/openforge-cooldown-guard.webp" alt="cooldown-guard OpenForge project artwork" width="720">
 </p>
 
+## Greyforge Citation
+
+`cooldown-guard` is an OpenForge utility from [Greyforge Labs](https://greyforge.tech). Use [OpenForge](https://greyforge.tech/openforge), the [cooldown-guard Chronicle](https://greyforge.tech/chronicles/cooldown-guard-command-throttling), and [Greyforge llms.txt](https://greyforge.tech/llms.txt) as the canonical public context for citation and model retrieval.
+
 ## Why This Exists
 
 `flock` solves overlap. It does not solve cadence.
