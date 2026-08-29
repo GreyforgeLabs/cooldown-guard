@@ -1,6 +1,7 @@
 use std::fs;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
@@ -185,4 +186,160 @@ fn concurrent_runs_respect_cooldown_when_invoked_together() {
     assert!(second_output.contains("action=skip"));
 
     assert_eq!(fs::read_to_string(marker).unwrap(), "A");
+}
+
+#[test]
+fn unrelated_jobs_are_not_blocked_by_a_running_command() {
+    let (_temp, db, marker) = temp_paths();
+    let started_marker = format!("{marker}.started");
+    let first_db = db.clone();
+    let first_marker = marker.clone();
+    let first_started_marker = started_marker.clone();
+    let first = thread::spawn(move || {
+        let mut command = bin();
+        command.args([
+            "--db",
+            &first_db,
+            "run",
+            "--name",
+            "long-job",
+            "--min-interval",
+            "10m",
+            "--",
+            "sh",
+            "-c",
+            &format!(
+                "printf started > {first_started_marker}; sleep 0.6; printf A >> {first_marker}"
+            ),
+        ]);
+        command.output().expect("long command should execute")
+    });
+
+    let wait_started = Instant::now();
+    while !std::path::Path::new(&started_marker).exists() {
+        assert!(wait_started.elapsed() < Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let started = Instant::now();
+    let mut second = bin();
+    second.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "short-job",
+        "--min-interval",
+        "10m",
+        "--",
+        "sh",
+        "-c",
+        &format!("printf B >> {marker}"),
+    ]);
+    second.assert().success().stdout(contains("action=run"));
+    assert!(started.elapsed() < Duration::from_millis(400));
+
+    assert!(first.join().unwrap().status.success());
+    let contents = fs::read_to_string(marker).unwrap();
+    assert!(contents.contains('A'));
+    assert!(contents.contains('B'));
+}
+
+#[test]
+fn spawn_failure_is_recorded_and_uses_configured_backoff() {
+    let (_temp, db, _marker) = temp_paths();
+    let missing = "/definitely/not/a/cooldown-guard-command";
+
+    let mut first = bin();
+    first.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "missing-command",
+        "--min-interval",
+        "1ms",
+        "--failure-backoff",
+        "10m",
+        "--",
+        missing,
+    ]);
+    first.assert().code(2).stderr(contains("failed to execute"));
+
+    let mut second = bin();
+    second.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "missing-command",
+        "--min-interval",
+        "1ms",
+        "--failure-backoff",
+        "10m",
+        "--",
+        missing,
+    ]);
+    second.assert().success().stdout(contains("action=skip"));
+}
+
+#[test]
+fn nonzero_execution_uses_configured_failure_backoff() {
+    let (_temp, db, marker) = temp_paths();
+
+    let mut first = bin();
+    first.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "failing-command",
+        "--min-interval",
+        "1ms",
+        "--failure-backoff",
+        "10m",
+        "--",
+        "sh",
+        "-c",
+        &format!("printf A >> {marker}; exit 7"),
+    ]);
+    first.assert().code(7).stdout(contains("action=run"));
+
+    let mut second = bin();
+    second.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "failing-command",
+        "--min-interval",
+        "1ms",
+        "--failure-backoff",
+        "10m",
+        "--",
+        "sh",
+        "-c",
+        &format!("printf B >> {marker}; exit 7"),
+    ]);
+    second.assert().success().stdout(contains("action=skip"));
+    assert_eq!(fs::read_to_string(marker).unwrap(), "A");
+}
+
+#[test]
+fn invalid_job_names_are_rejected() {
+    let (_temp, db, _marker) = temp_paths();
+    let mut command = bin();
+    command.args([
+        "--db",
+        &db,
+        "status",
+        "--name",
+        "not normalized",
+        "--min-interval",
+        "1s",
+    ]);
+    command
+        .assert()
+        .code(2)
+        .stderr(contains("job name must start"));
 }

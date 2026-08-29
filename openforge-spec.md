@@ -1,10 +1,10 @@
 # cooldown-guard - Implementation Spec
 
-**Status:** In development
+**Status:** Released
 **Pipeline:** `forge openforge cooldown-guard`
 **License:** AGPL-3.0
 **Repo:** `github.com/GreyforgeLabs/cooldown-guard`
-**Version:** v0.1.0
+**Version:** v0.2.0
 **Language:** Rust
 
 ---
@@ -20,7 +20,7 @@ It solves the gap between:
 
 **Audience:** operators, homelab users, cron-heavy environments, repair loops, and maintenance pipelines.
 
-## 2. v0.1 Scope
+## 2. v0.2 Scope
 
 The initial release stays narrow:
 
@@ -29,34 +29,52 @@ The initial release stays narrow:
 - `clear` removes saved state for a key
 - SQLite-backed run history
 - human-readable and JSON output
+- whole-millisecond cooldown precision
+- short atomic claim leases with crash recovery
+- configurable failure backoff and bounded per-job history
 
-The cooldown rule in v0.1 is based on the last completed attempt regardless of exit status.
+Successful attempts use `--min-interval`. Spawn failures and nonzero exits use
+`--failure-backoff`, which defaults to the minimum interval for compatibility.
 
 ## 3. Architecture
 
 ### 3.1 State Model
 
 - one SQLite database
-- one `runs` table keyed by `name`
+- one append-only `runs` history table
+- one `run_claims` table keyed by normalized job `name`
 - each row stores:
   - `name`
   - `started_at`
   - `finished_at`
   - `exit_code`
   - `succeeded`
+- each claim stores:
+  - an opaque owner token
+  - claim time in milliseconds
+  - lease expiry in milliseconds
+- existing v0.1 second-precision rows migrate additively
+- only the newest 1,000 completed attempts per job are retained
 
 ### 3.2 Execution Model
 
 1. resolve DB path
-2. read the most recent row for `name`
-3. compare `finished_at` to `now`
-4. if the remaining cooldown is greater than zero:
+2. in a short immediate transaction, remove expired claims and compare the
+   latest run or active claim to `now`
+3. if the job is ready, atomically write an owner-token lease and commit
+4. if the remaining cooldown or active lease is greater than zero:
    - print skip result
    - exit `0`
 5. otherwise:
-   - execute the provided command directly
-   - record the completed run
+   - execute the provided command directly, outside any write transaction
+   - in a second short transaction, record the result only if the unexpired
+     owner token still matches
    - return the child exit code
+
+An expired claim can be replaced without database repair. A stale process may
+finish its child command, but it cannot finalize after lease expiry or
+replacement. SQLite busy waits are bounded to five seconds and returned as
+observable runtime errors.
 
 ### 3.3 Security Boundary
 
@@ -69,6 +87,7 @@ The cooldown rule in v0.1 is based on the last completed attempt regardless of e
 
 ```bash
 cooldown-guard run --name backup --min-interval 30m -- ./backup.sh
+cooldown-guard run --name backup --min-interval 30m --failure-backoff 5m --lease 2h -- ./backup.sh
 cooldown-guard status --name backup --min-interval 30m
 cooldown-guard --json status --name backup --min-interval 30m
 cooldown-guard clear --name backup
@@ -84,10 +103,9 @@ cooldown-guard clear --name backup
 
 ## 6. Deferred Work
 
-Deliberately not in v0.1:
+Deliberately not in v0.2:
 
 - success-only cooldown policies
 - labels/tags per key
-- pruning and retention
 - subcommands for listing all tracked keys
 - shell-completion generation

@@ -11,7 +11,7 @@ git clone https://github.com/GreyforgeLabs/cooldown-guard.git && cd cooldown-gua
 
 ## What This Project Does
 
-`cooldown-guard` is a Rust CLI for minimum-interval enforcement. It records completed command runs in SQLite, tells you whether a named job is ready or still cooling down, and can skip re-execution cleanly when the interval has not elapsed.
+`cooldown-guard` is a Rust CLI for minimum-interval enforcement. It records completed command runs in SQLite, atomically leases named jobs without holding a transaction during execution, and applies separate success and failure cooldowns.
 
 ## Project Structure
 
@@ -49,7 +49,7 @@ cooldown-guard/
 
 ```bash
 cargo run --locked -- --version
-# Expected output: cooldown-guard 0.1.0
+# Expected output: cooldown-guard 0.2.0
 ```
 
 ## Key Entry Points
@@ -63,6 +63,9 @@ cargo run --locked -- --version
 - Default state DB: platform state directory for `cooldown-guard`, usually `~/.local/state/cooldown-guard/runs.sqlite3` on Linux
 - Override state DB: `--db /path/to/runs.sqlite3`
 - Output mode: add `--json`
+- Failure retry interval: `--failure-backoff 5m` (defaults to `--min-interval`)
+- Claim lifetime: `--lease 24h` (set longer than the maximum expected command runtime)
+- Job names: 1–128 normalized ASCII characters; first character must be alphanumeric
 
 ## Common Tasks
 

@@ -18,7 +18,7 @@
 
 Many recurring jobs should not run more than once every 15 minutes, 30 minutes, or 6 hours even if a scheduler, human, or repair loop keeps asking. `cooldown-guard` is a small Rust CLI that keeps a SQLite ledger of past runs and decides whether the next invocation should execute or skip.
 
-The v0.1 rule is intentionally simple: cooldown is based on the last completed attempt, regardless of whether that attempt exited successfully.
+Successful attempts use the normal cooldown. Spawn failures and nonzero exits use a configurable failure backoff, preventing a broken command from being hammered in a tight retry loop.
 
 ## Quick Start
 
@@ -37,6 +37,9 @@ cargo run -- run --name backup --min-interval 30m -- ./backup.sh
 ## Features
 
 - **Minimum interval enforcement** - run a command only when its cooldown window has elapsed
+- **Atomic leases** - same-name contenders have one winner without holding a database transaction while the command runs
+- **Failure backoff** - give failed attempts a retry interval distinct from successful runs
+- **Millisecond precision** - accepted durations preserve whole-millisecond values
 - **SQLite state ledger** - durable run history with no daemon and no background service
 - **Human and JSON output** - useful in shells, cron logs, and automation wrappers
 - **Explicit subcommands** - `run`, `status`, and `clear`
@@ -48,6 +51,9 @@ cargo run -- run --name backup --min-interval 30m -- ./backup.sh
 # Run a job if 30 minutes have elapsed since the last completed attempt
 cooldown-guard run --name backup --min-interval 30m -- ./backup.sh
 
+# Retry a failed command after 5 minutes, even though successful runs wait 30 minutes
+cooldown-guard run --name backup --min-interval 30m --failure-backoff 5m -- ./backup.sh
+
 # Inspect current cooldown state
 cooldown-guard status --name backup --min-interval 30m
 
@@ -57,6 +63,16 @@ cooldown-guard --json status --name backup --min-interval 30m
 # Clear stored history for a key
 cooldown-guard clear --name backup
 ```
+
+## Guard Semantics
+
+- The claim and finalize writes are short SQLite transactions. The child command runs after the claim commits, so unrelated jobs can proceed concurrently.
+- `--lease` defaults to `24h`. Set it longer than the maximum expected command runtime. After expiry, another process may claim the job and the stale owner is not allowed to finalize.
+- `--failure-backoff` defaults to `--min-interval` when omitted. It applies to spawn failures and completed commands with a nonzero exit.
+- Duration values must be positive whole-millisecond values; `1ms`, `999ms`, and `1s` retain their exact cooldown meaning.
+- Job names are 1–128 ASCII characters, start with a letter or digit, and otherwise use letters, digits, `.`, `_`, `:`, or `-`.
+- The ledger retains the newest 1,000 completed attempts per job. Existing v0.1 second-precision rows migrate in place.
+- SQLite lock waits are bounded at five seconds and surface as runtime errors. `clear` removes both history and any active lease for that job.
 
 Example output:
 

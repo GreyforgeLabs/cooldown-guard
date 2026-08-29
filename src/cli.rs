@@ -38,6 +38,9 @@ struct StatusArgs {
 
     #[arg(long, value_name = "DURATION")]
     min_interval: String,
+
+    #[arg(long, value_name = "DURATION")]
+    failure_backoff: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -55,6 +58,12 @@ struct RunArgs {
     #[arg(long, value_name = "DURATION")]
     min_interval: String,
 
+    #[arg(long, value_name = "DURATION")]
+    failure_backoff: Option<String>,
+
+    #[arg(long, value_name = "DURATION", default_value = "24h")]
+    lease: String,
+
     #[arg(required = true, value_name = "COMMAND")]
     command: Vec<String>,
 }
@@ -67,8 +76,21 @@ pub fn run() -> Result<i32> {
     match cli.command {
         Commands::Run(args) => {
             let min_interval = guard::parse_min_interval(&args.min_interval)?;
-            let result =
-                guard::run_guarded(&mut connection, &args.name, min_interval, &args.command)?;
+            let failure_backoff = args
+                .failure_backoff
+                .as_deref()
+                .map(guard::parse_failure_backoff)
+                .transpose()?
+                .unwrap_or(min_interval);
+            let lease_duration = guard::parse_lease_duration(&args.lease)?;
+            let result = guard::run_guarded(
+                &mut connection,
+                &args.name,
+                min_interval,
+                failure_backoff,
+                lease_duration,
+                &args.command,
+            )?;
             print_run_result(&result, cli.json)?;
             Ok(result
                 .exit_code
@@ -76,7 +98,13 @@ pub fn run() -> Result<i32> {
         }
         Commands::Status(args) => {
             let min_interval = guard::parse_min_interval(&args.min_interval)?;
-            let result = guard::status(&connection, &args.name, min_interval)?;
+            let failure_backoff = args
+                .failure_backoff
+                .as_deref()
+                .map(guard::parse_failure_backoff)
+                .transpose()?
+                .unwrap_or(min_interval);
+            let result = guard::status(&connection, &args.name, min_interval, failure_backoff)?;
             print_status_result(&result, cli.json)?;
             Ok(0)
         }
