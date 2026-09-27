@@ -130,6 +130,122 @@ fn clear_resets_saved_state() {
 }
 
 #[test]
+fn clear_refuses_live_claim_without_force() {
+    let (_temp, db, marker) = temp_paths();
+    let started = format!("{marker}.started");
+    let mut running = std::process::Command::new(env!("CARGO_BIN_EXE_cooldown-guard"))
+        .args([
+            "--db",
+            &db,
+            "run",
+            "--name",
+            "backup",
+            "--min-interval",
+            "10m",
+            "--lease",
+            "2s",
+            "--",
+            "sh",
+            "-c",
+            &format!("printf started > {started}; sleep 0.5; printf A >> {marker}"),
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("long command should start");
+    let wait_started = Instant::now();
+    while !std::path::Path::new(&started).exists() {
+        assert!(wait_started.elapsed() < Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let mut guarded_clear = bin();
+    guarded_clear.args(["--db", &db, "clear", "--name", "backup"]);
+    guarded_clear
+        .assert()
+        .failure()
+        .stderr(contains("active claim"));
+
+    let mut status = bin();
+    status.args([
+        "--db",
+        &db,
+        "status",
+        "--name",
+        "backup",
+        "--min-interval",
+        "10m",
+    ]);
+    status
+        .assert()
+        .success()
+        .stdout(contains("state=cooling-down"));
+
+    let mut force_clear = bin();
+    force_clear.args(["--db", &db, "clear", "--name", "backup", "--force"]);
+    force_clear
+        .assert()
+        .success()
+        .stdout(contains("action=clear"));
+    assert!(!running.wait().expect("child finishes").success());
+}
+
+#[test]
+fn expired_lease_allows_overlap_and_stale_owner_cannot_finalize() {
+    let (_temp, db, marker) = temp_paths();
+    let started = format!("{marker}.started");
+    let mut first = std::process::Command::new(env!("CARGO_BIN_EXE_cooldown-guard"))
+        .args([
+            "--db",
+            &db,
+            "run",
+            "--name",
+            "backup",
+            "--min-interval",
+            "10m",
+            "--lease",
+            "100ms",
+            "--",
+            "sh",
+            "-c",
+            &format!("printf started > {started}; sleep 0.5; printf A >> {marker}"),
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("first command should start");
+    let wait_started = Instant::now();
+    while !std::path::Path::new(&started).exists() {
+        assert!(wait_started.elapsed() < Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(10));
+    }
+    thread::sleep(Duration::from_millis(180));
+    assert!(
+        first.try_wait().unwrap().is_none(),
+        "first child should still be running"
+    );
+
+    let mut second = bin();
+    second.args([
+        "--db",
+        &db,
+        "run",
+        "--name",
+        "backup",
+        "--min-interval",
+        "10m",
+        "--",
+        "sh",
+        "-c",
+        &format!("printf B >> {marker}"),
+    ]);
+    second.assert().success().stdout(contains("action=run"));
+    assert!(!first.wait().expect("first command finishes").success());
+    let text = fs::read_to_string(marker).unwrap();
+    assert!(text.contains('A') && text.contains('B'));
+}
+
+#[test]
 fn concurrent_runs_respect_cooldown_when_invoked_together() {
     let (_temp, db, marker) = temp_paths();
 

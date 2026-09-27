@@ -49,7 +49,7 @@ cooldown-guard/
 
 ```bash
 cargo run --locked -- --version
-# Expected output: cooldown-guard 0.2.0
+# Expected output: cooldown-guard 0.3.0
 ```
 
 ## Key Entry Points
@@ -64,7 +64,8 @@ cargo run --locked -- --version
 - Override state DB: `--db /path/to/runs.sqlite3`
 - Output mode: add `--json`
 - Failure retry interval: `--failure-backoff 5m` (defaults to `--min-interval`)
-- Claim lifetime: `--lease 24h` (set longer than the maximum expected command runtime)
+- Claim lifetime: `--lease 24h` is fixed and nonrenewing; set it longer than the maximum expected command runtime. After expiry, overlap is possible.
+- `clear` refuses an active claim; `clear --force` abandons one without stopping its child.
 - Job names: 1–128 normalized ASCII characters; first character must be alphanumeric
 
 ## Common Tasks

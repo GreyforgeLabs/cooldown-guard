@@ -4,7 +4,7 @@
 **Pipeline:** `forge openforge cooldown-guard`
 **License:** AGPL-3.0
 **Repo:** `github.com/GreyforgeLabs/cooldown-guard`
-**Version:** v0.2.0
+**Version:** v0.3.0
 **Language:** Rust
 
 ---
@@ -26,7 +26,7 @@ The initial release stays narrow:
 
 - `run` executes a command only if the cooldown has elapsed
 - `status` reports whether a named key is ready or still cooling down
-- `clear` removes saved state for a key
+- `clear` removes saved state for a key, refusing an active claim unless `--force` is supplied
 - SQLite-backed run history
 - human-readable and JSON output
 - whole-millisecond cooldown precision
@@ -73,7 +73,10 @@ Successful attempts use `--min-interval`. Spawn failures and nonzero exits use
 
 An expired claim can be replaced without database repair. A stale process may
 finish its child command, but it cannot finalize after lease expiry or
-replacement. SQLite busy waits are bounded to five seconds and returned as
+replacement. The lease is not renewed: overlapping child execution is possible
+after expiry, so the lease must exceed the expected child runtime. `clear`
+refuses a live claim unless `--force` explicitly accepts that same risk.
+SQLite busy waits are bounded to five seconds and returned as
 observable runtime errors.
 
 ### 3.3 Security Boundary

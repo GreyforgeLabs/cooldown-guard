@@ -47,6 +47,12 @@ struct StatusArgs {
 struct ClearArgs {
     #[arg(long)]
     name: String,
+
+    #[arg(
+        long,
+        help = "Clear an active claim too; a running child may overlap a new run"
+    )]
+    force: bool,
 }
 
 #[derive(Args, Debug)]
@@ -109,7 +115,7 @@ pub fn run() -> Result<i32> {
             Ok(0)
         }
         Commands::Clear(args) => {
-            let result = guard::clear(&connection, &args.name)?;
+            let result = guard::clear(&mut connection, &args.name, args.force)?;
             print_clear_result(&result, cli.json)?;
             Ok(0)
         }

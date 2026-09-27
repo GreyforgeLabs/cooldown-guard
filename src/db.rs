@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension, params};
+use anyhow::{Result, anyhow};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use crate::model::RunRecord;
 
@@ -106,9 +106,29 @@ pub fn last_run(connection: &Connection, name: &str) -> Result<Option<RunRecord>
     Ok(row)
 }
 
-pub fn clear_runs(connection: &Connection, name: &str) -> Result<usize> {
-    let deleted = connection.execute("DELETE FROM runs WHERE name = ?", params![name])?;
-    connection.execute("DELETE FROM run_claims WHERE name = ?", params![name])?;
+pub fn clear_runs(
+    connection: &mut Connection,
+    name: &str,
+    force: bool,
+    now_ms: i64,
+) -> Result<usize> {
+    let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let active = tx
+        .query_row(
+            "SELECT 1 FROM run_claims WHERE name = ? AND lease_expires_at_ms > ?",
+            params![name, now_ms],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if active && !force {
+        return Err(anyhow!(
+            "job has an active claim; use clear --force only if overlap is acceptable"
+        ));
+    }
+    let deleted = tx.execute("DELETE FROM runs WHERE name = ?", params![name])?;
+    tx.execute("DELETE FROM run_claims WHERE name = ?", params![name])?;
+    tx.commit()?;
     Ok(deleted)
 }
 

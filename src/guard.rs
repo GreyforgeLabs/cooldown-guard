@@ -292,9 +292,9 @@ fn status_at(
     })
 }
 
-pub fn clear(connection: &Connection, name: &str) -> Result<ClearResult> {
+pub fn clear(connection: &mut Connection, name: &str, force: bool) -> Result<ClearResult> {
     validate_job_name(name)?;
-    let deleted_runs = db::clear_runs(connection, name)?;
+    let deleted_runs = db::clear_runs(connection, name, force, now_ms())?;
     Ok(ClearResult {
         name: name.to_owned(),
         deleted_runs,

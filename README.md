@@ -14,7 +14,7 @@
 
 ## Why This Exists
 
-`flock` solves overlap. It does not solve cadence.
+`flock` stops overlap while a lock is held. It does not solve cadence.
 
 Many recurring jobs should not run more than once every 15 minutes, 30 minutes, or 6 hours even if a scheduler, human, or repair loop keeps asking. `cooldown-guard` is a small Rust CLI that keeps a SQLite ledger of past runs and decides whether the next invocation should execute or skip.
 
@@ -37,7 +37,7 @@ cargo run -- run --name backup --min-interval 30m -- ./backup.sh
 ## Features
 
 - **Minimum interval enforcement** - run a command only when its cooldown window has elapsed
-- **Atomic leases** - same-name contenders have one winner without holding a database transaction while the command runs
+- **Atomic leases** - same-name contenders have one winner while a claim is active, without holding a database transaction during the child command
 - **Failure backoff** - give failed attempts a retry interval distinct from successful runs
 - **Millisecond precision** - accepted durations preserve whole-millisecond values
 - **SQLite state ledger** - durable run history with no daemon and no background service
@@ -60,19 +60,22 @@ cooldown-guard status --name backup --min-interval 30m
 # Machine-readable output
 cooldown-guard --json status --name backup --min-interval 30m
 
-# Clear stored history for a key
+# Clear completed history; refuses an active claim
 cooldown-guard clear --name backup
+
+# Explicitly abandon an active claim when overlap is acceptable
+cooldown-guard clear --name backup --force
 ```
 
 ## Guard Semantics
 
 - The claim and finalize writes are short SQLite transactions. The child command runs after the claim commits, so unrelated jobs can proceed concurrently.
-- `--lease` defaults to `24h`. Set it longer than the maximum expected command runtime. After expiry, another process may claim the job and the stale owner is not allowed to finalize.
+- `--lease` defaults to `24h`. It is a fixed, nonrenewing claim. Set it longer than the maximum expected command runtime. After expiry, another process may claim the job **even while the first child is still running**; the stale owner cannot finalize. The overlap guarantee lasts only for the lease, not for arbitrary child runtime.
 - `--failure-backoff` defaults to `--min-interval` when omitted. It applies to spawn failures and completed commands with a nonzero exit.
 - Duration values must be positive whole-millisecond values; `1ms`, `999ms`, and `1s` retain their exact cooldown meaning.
 - Job names are 1–128 ASCII characters, start with a letter or digit, and otherwise use letters, digits, `.`, `_`, `:`, or `-`.
 - The ledger retains the newest 1,000 completed attempts per job. Existing v0.1 second-precision rows migrate in place.
-- SQLite lock waits are bounded at five seconds and surface as runtime errors. `clear` removes both history and any active lease for that job.
+- SQLite lock waits are bounded at five seconds and surface as runtime errors. `clear` refuses a live claim by default and changes nothing in that case. `clear --force` removes both history and an active claim; it does not stop a running child, so a new invocation may overlap it.
 
 Example output:
 

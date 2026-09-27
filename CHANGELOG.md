@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-27
+
+### Fixed
+
+- `clear` now checks and deletes state in one transaction, refusing an active claim unless `--force` is supplied.
+
+### Changed
+
+- Explain explicitly that a fixed lease limits overlap protection to its lifetime; a running child can outlive it.
+- Document that forced clear abandons a claim without stopping its child.
+
 ## [0.2.0] - 2026-08-28
 
 ### Added
